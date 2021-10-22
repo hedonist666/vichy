@@ -1,0 +1,54 @@
+import numpy as np
+import copy
+import pandas as pd
+from numpy.linalg import solve, norm,cond
+from scipy.linalg import hilbert
+
+def qr(a): #алгоритм QR-разложения методом вращений
+    n = a.shape[0]
+    q, r = np.identity(n), copy.copy(a)
+    for i in range(n):
+        for j in range(i+1,n):
+            c = r[i,i]/(r[i,i]**2 + (r[j,i]**2))**0.5
+            s = r[j,i]/(r[i,i]**2 + (r[j,i]**2))**0.5
+            r[i,:], r[j,:] = c*r[i,:] + s*r[j,:], -s*r[i,:] + c*r[j,:]
+            q[:,i], q[:,j] = c*q[:,i] + s*q[:,j], -s*q[:,i] + c*q[:,j]
+    return q,r
+
+def qr_solve(q,r,b=None): #решение СЛАУ QR-методом
+    if b is None:
+        b = np.random.uniform(-100,100,size=(q.shape[0]))
+    n = r.shape[1]
+    x, y = np.zeros(n), np.dot(np.transpose(q),b)
+    for j in range(len(y)):
+        x[n-j-1]=(y[n-j-1]-sum([r[n-j-1,n-p-1]*x[n-p-1] for p in range(j)]))/r[n-j-1,n-j-1]
+    return x
+
+a = np.random.rand(2,2)
+b = np.random.rand(2)
+q,r = qr(a)
+norm(qr_solve(q,r,b)-solve(a,b))
+
+matrixes = [hilbert(n) for n in range(3,6)]
+
+def regularisation_solution(a,b=None):
+    if b is None:
+        b = np.random.uniform(-100,100,size=(a.shape[1]))
+    ans = pd.DataFrame(columns=["alpha","cond(a+alpha*E)","||x-x_alpha||","||b-A*x_alpha||"])
+    q,r = qr(a)
+    x = qr_solve(q,r,b)
+    ans = ans.append(pd.Series([0,cond(a),norm(x-solve(a,b)),norm(b-a@x)],index=ans.columns),True)
+    E = np.identity(a.shape[0])
+    x = solve(a,b)
+    for i in range(2,13,2):
+        a_i = a + 10**(-i)*E
+        q,r = qr(a_i)
+        x_i = qr_solve(q,r,b)
+        ans = ans.append(pd.Series([10**(-i),cond(a_i),norm(x_i-x),norm(b-a@x_i)],index=ans.columns),True)
+    return ans
+
+regularisation_solution(matrixes[0],np.array([1,1,1])) #результат для матрицы Гильберта 3-го порядка
+
+regularisation_solution(matrixes[1],np.array([1,1,1,1])) #результат для матрицы Гильберта 4-го порядка
+
+regularisation_solution(hilbert(5),hilbert(5)@np.ones(5)) #результат для матрицы Гильберта 5-го порядка
